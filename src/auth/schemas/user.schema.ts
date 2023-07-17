@@ -13,6 +13,15 @@ export class User extends Document {
 
   @Prop()
   password: string;
+
+  @Prop()
+  online: boolean;
+
+  @Prop()
+  friend: string[];
+
+  @Prop()
+  friendrequest: string[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
