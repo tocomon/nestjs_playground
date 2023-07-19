@@ -12,8 +12,8 @@ import { LostDto } from './dto/lost.dto';
 import { RenameDto } from './dto/rename.dto';
 import { GetoneDto } from './dto/getone.dto';
 import { Query } from 'express-serve-static-core';
-import { RequestFriendDto } from './dto/requestfriend.dto';
-import { AcceptFriendDto } from './dto/acceptfriend.dto';
+import * as nodemailer from 'nodemailer';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,7 +23,11 @@ export class AuthService {
   ) {}
 
   async signUp(signUpDto: SignUpDto): Promise<{ token: string }> {
-    const { name, email, password } = signUpDto;
+    const { email, password } = signUpDto;
+    const isUserExist = await this.userModel.exists({email: email});
+    if (isUserExist) {
+      throw new UnauthorizedException('duplicate email');
+    }
 
     // const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,12}$/;
     // if (!passwordRegex.test(password)) {
@@ -31,11 +35,13 @@ export class AuthService {
     // }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
+    const name = "";
+    const online = 0;
     const user = await this.userModel.create({
       name,
       email,
       password: hashedPassword,
+      online
     });
 
     const token = this.jwtService.sign({ id: user._id });
@@ -46,7 +52,7 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<{ token: string }> {
     const { email, password } = loginDto;
 
-    const user = await this.userModel.findOne({ email });
+    const user = await this.userModel.findOne({ email: email });
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -57,10 +63,16 @@ export class AuthService {
     if (!isPasswordMatched) {
       throw new UnauthorizedException('Invalid email or password');
     }
-
+    await this.userModel.updateOne({email: email}, {login: 1})
     const token = this.jwtService.sign({ id: user._id });
-
+    
     return { token };
+  }
+
+  async logout(user: User){
+    const mymail = user.email;
+    await this.userModel.updateOne({ email: mymail }, { online: 0 })
+    return {msg:`${mymail} has logout`};
   }
 
   async update(updateDto: UpdateDto) {
@@ -73,25 +85,25 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await this.userModel.updateOne({email}, {password: hashedPassword})
+    await this.userModel.updateOne({email: email}, {password: hashedPassword})
 
     return {msg:"Password Changed"};
   }
 
-  async lost(lostDto: LostDto) {
-    const { email } = lostDto;
+  // async lost(lostDto: LostDto) {
+  //   const { email } = lostDto;
     
-    const newPassword = Math.floor(100000 + Math.random() * 900000).toString();
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.userModel.updateOne({email}, {password: hashedPassword})
+  //   const newPassword = Math.floor(100000 + Math.random() * 900000).toString();
+  //   const hashedPassword = await bcrypt.hash(newPassword, 10);
+  //   await this.userModel.updateOne({email: email}, {password: hashedPassword})
 
-    return {password: newPassword};
-  }
+  //   return {password: newPassword};
+  // }
 
   async rename(renameDto: RenameDto) {
     const { name, email} = renameDto;
 
-    await this.userModel.updateOne({email}, {name: name})
+    await this.userModel.updateOne({email: email}, {name: name})
 
     return {msg:`Name Changed to ${name}`};
   }
@@ -103,27 +115,42 @@ export class AuthService {
 
   async getOne(getoneDto: GetoneDto) {
     const { email } = getoneDto;
-    const user = await this.userModel.findOne({ email });
+    const user = await this.userModel.findOne({ email: email });
     if(!user){
         throw new NotFoundException(`User with name ${email} not found.`)
     }
     return user;
   }
 
-  async requestFriend(requestfriendDto: RequestFriendDto, user: User) {
-    const { email } = requestfriendDto;
+  async sendEmail(lostDto: LostDto) {
+    const { email } = lostDto;
 
-    const res = await this.userModel.updateOne({ email }, { $push: { friendrequest: user.email }})
-    return res;
-  }
+    const newPassword = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userModel.updateOne({email: email}, {password: hashedPassword})
 
-  async acceptFriend(acceptfriendDto: AcceptFriendDto, user: User) {
-    const { email } = acceptfriendDto;
-    const mymail = user.email;
-    await this.userModel.updateOne({ mymail }, { $pull: { friendrequest: email }})
-    
-    await this.userModel.updateOne({ mymail }, { $push: { friend: email }})
-    await this.userModel.updateOne({ email }, { $push: { friend: mymail }})
-    return {msg:`${email} has added to friend`};
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.LOST_ID,
+        pass: process.env.LOST_PWD
+      }
+    });
+  
+    const mailOptions = {
+      from: process.env.LOST_ID,
+      to: email,
+      subject: 'New password',
+      text: `Your password is ${newPassword}.`
+    };
+  
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Email sent:', info.response);
+      return {msg:"new password mail sent"};
+    } catch (error) {
+      console.error('Error sending email:', error);
+      return {msg:"Error sending email"};
+    }
   }
 }

@@ -15,7 +15,7 @@ export class User extends Document {
   password: string;
 
   @Prop()
-  online: boolean;
+  online: boolean; // 0: logout, 1: login
 
   @Prop()
   friend: string[];

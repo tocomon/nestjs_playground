@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Query, UseGuards, Param, Req, Request } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query, UseGuards, Param, Req, Request, Delete } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignUpDto } from './dto/signup.dto';
@@ -8,8 +8,7 @@ import { LostDto } from './dto/lost.dto';
 import { RenameDto } from './dto/rename.dto';
 import { GetoneDto } from './dto/getone.dto';
 import { User } from './schemas/user.schema';
-import { RequestFriendDto } from './dto/requestfriend.dto';
-import { AcceptFriendDto } from './dto/acceptfriend.dto';
+
 
 @Controller('auth')
 export class AuthController {
@@ -26,9 +25,9 @@ export class AuthController {
   }
 
   @Get('/logout')
+  @UseGuards(AuthGuard())
   logout(@Request() req): any {
-    req.cookie.destroy();
-    return { msg: 'The user has loggedout' }
+    return this.authService.logout(req.user);
   }
 
   @Patch('/update')
@@ -39,7 +38,7 @@ export class AuthController {
 
   @Get('/lost')
   lost(@Body() lostDto: LostDto) {
-    return this.authService.lost(lostDto);
+    return this.authService.sendEmail(lostDto);
   }
 
   @Patch('/rename')
@@ -58,15 +57,4 @@ export class AuthController {
     return this.authService.getOne(getoneDto);
   }
 
-  @Post("/requestfriend")
-  @UseGuards(AuthGuard())
-  requestFriend(@Body() requestfriendDto: RequestFriendDto, @Req() req) {
-    return this.authService.requestFriend(requestfriendDto, req.user);
-  }
-
-  @Get("/acceptfriend")
-  @UseGuards(AuthGuard())
-  acceptFriend(@Body() acceptfriendDto: AcceptFriendDto, @Req() req) {
-    return this.authService.acceptFriend(acceptfriendDto, req.user);
-  }
 }
